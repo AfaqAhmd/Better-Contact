@@ -26,9 +26,13 @@ function jsonResponse(body, status = 200) {
   return Response.json(body, { status });
 }
 
-function toPositiveInt(value, fallback) {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+function hasResultPayload(pollData) {
+  if (!pollData || typeof pollData !== "object") return false;
+  return (
+    typeof pollData.data !== "undefined" ||
+    typeof pollData.result !== "undefined" ||
+    typeof pollData.items !== "undefined"
+  );
 }
 
 async function safeReadResponse(response) {
@@ -42,9 +46,6 @@ async function safeReadResponse(response) {
 
 export async function POST(request) {
   try {
-    const pollIntervalMs = toPositiveInt(process.env.BETTERCONTACT_POLL_INTERVAL_MS, POLL_INTERVAL_MS);
-    const maxPollAttempts = toPositiveInt(process.env.BETTERCONTACT_MAX_POLL_ATTEMPTS, MAX_POLL_ATTEMPTS);
-
     if (!process.env.BETTERCONTACT_API_KEY) {
       return jsonResponse(
         {
@@ -107,7 +108,7 @@ export async function POST(request) {
     }
 
     let lastPollData = null;
-    for (let attempt = 1; attempt <= maxPollAttempts; attempt += 1) {
+    for (let attempt = 1; attempt <= MAX_POLL_ATTEMPTS; attempt += 1) {
       const pollResponse = await fetch(`${BETTERCONTACT_BASE_URL}/async/${requestId}`, {
         method: "GET",
         headers: {
@@ -157,16 +158,29 @@ export async function POST(request) {
         });
       }
 
-      if (attempt < maxPollAttempts) {
-        await sleep(pollIntervalMs);
+      if (attempt < MAX_POLL_ATTEMPTS) {
+        await sleep(POLL_INTERVAL_MS);
       }
+    }
+
+    // Some upstream responses can include a complete payload without a clear terminal status.
+    // In that case, treat it as "no phone found" instead of hard timeout.
+    if (hasResultPayload(lastPollData)) {
+      return jsonResponse({
+        success: true,
+        found: false,
+        phone: null,
+        status: lastPollData?.status || "unknown",
+        requestId,
+        raw: lastPollData,
+      });
     }
 
     return jsonResponse(
       {
         success: false,
         code: "TIMEOUT",
-        error: "Timed out waiting for Better Contact async result. Try again or increase BETTERCONTACT_MAX_POLL_ATTEMPTS.",
+        error: "Timed out waiting for Better Contact async result.",
         requestId,
         details: lastPollData,
       },
