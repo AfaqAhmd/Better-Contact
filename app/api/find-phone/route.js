@@ -8,8 +8,27 @@ import {
   findPhoneFromPollResponse,
 } from "../../../lib/bettercontact";
 
+const TERMINAL_STATUSES = new Set([
+  "completed",
+  "terminated",
+  "done",
+  "success",
+  "finished",
+  "failed",
+  "error",
+  "not_found",
+  "no_data",
+  "cancelled",
+  "canceled",
+]);
+
 function jsonResponse(body, status = 200) {
   return Response.json(body, { status });
+}
+
+function toPositiveInt(value, fallback) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 async function safeReadResponse(response) {
@@ -23,6 +42,9 @@ async function safeReadResponse(response) {
 
 export async function POST(request) {
   try {
+    const pollIntervalMs = toPositiveInt(process.env.BETTERCONTACT_POLL_INTERVAL_MS, POLL_INTERVAL_MS);
+    const maxPollAttempts = toPositiveInt(process.env.BETTERCONTACT_MAX_POLL_ATTEMPTS, MAX_POLL_ATTEMPTS);
+
     if (!process.env.BETTERCONTACT_API_KEY) {
       return jsonResponse(
         {
@@ -85,7 +107,7 @@ export async function POST(request) {
     }
 
     let lastPollData = null;
-    for (let attempt = 1; attempt <= MAX_POLL_ATTEMPTS; attempt += 1) {
+    for (let attempt = 1; attempt <= maxPollAttempts; attempt += 1) {
       const pollResponse = await fetch(`${BETTERCONTACT_BASE_URL}/async/${requestId}`, {
         method: "GET",
         headers: {
@@ -110,22 +132,33 @@ export async function POST(request) {
 
       lastPollData = pollData;
       const status = String(pollData?.status || "").toLowerCase();
-      const isDone = status === "completed" || status === "terminated";
+      const phone = findPhoneFromPollResponse(pollData);
 
-      if (isDone) {
-        const phone = findPhoneFromPollResponse(pollData);
+      // Return early whenever a phone is present, even if status labels vary.
+      if (phone) {
         return jsonResponse({
           success: true,
-          found: Boolean(phone),
-          phone: phone || null,
+          found: true,
+          phone,
           status: pollData?.status || "terminated",
           requestId,
           raw: pollData,
         });
       }
 
-      if (attempt < MAX_POLL_ATTEMPTS) {
-        await sleep(POLL_INTERVAL_MS);
+      if (TERMINAL_STATUSES.has(status)) {
+        return jsonResponse({
+          success: true,
+          found: false,
+          phone: null,
+          status: pollData?.status || "terminated",
+          requestId,
+          raw: pollData,
+        });
+      }
+
+      if (attempt < maxPollAttempts) {
+        await sleep(pollIntervalMs);
       }
     }
 
@@ -133,7 +166,7 @@ export async function POST(request) {
       {
         success: false,
         code: "TIMEOUT",
-        error: "Timed out waiting for Better Contact async result.",
+        error: "Timed out waiting for Better Contact async result. Try again or increase BETTERCONTACT_MAX_POLL_ATTEMPTS.",
         requestId,
         details: lastPollData,
       },
