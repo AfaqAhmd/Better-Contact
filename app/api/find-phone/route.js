@@ -142,6 +142,7 @@ export async function POST(request) {
           found: true,
           phone,
           status: pollData?.status || "terminated",
+          reason: "found",
           requestId,
           raw: pollData,
         });
@@ -153,6 +154,7 @@ export async function POST(request) {
           found: false,
           phone: null,
           status: pollData?.status || "terminated",
+          reason: "not_found",
           requestId,
           raw: pollData,
         });
@@ -171,21 +173,22 @@ export async function POST(request) {
         found: false,
         phone: null,
         status: lastPollData?.status || "unknown",
+        reason: "not_found",
         requestId,
         raw: lastPollData,
       });
     }
 
-    return jsonResponse(
-      {
-        success: false,
-        code: "TIMEOUT",
-        error: "Timed out waiting for Better Contact async result.",
-        requestId,
-        details: lastPollData,
-      },
-      504,
-    );
+    // First-version UX: never show timeout to the client; return not found instead.
+    return jsonResponse({
+      success: true,
+      found: false,
+      phone: null,
+      status: lastPollData?.status || "pending",
+      reason: "poll_window_ended",
+      requestId,
+      raw: lastPollData || {},
+    });
   } catch (error) {
     return jsonResponse(
       {
