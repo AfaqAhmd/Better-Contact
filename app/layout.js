@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Better Contact Phone Lookup",
-  description: "Secure Better Contact phone enrichment lookup",
+  title: "Contact Phone Lookup",
+  description: "Secure Contact phone enrichment lookup",
 };
 
 export default function RootLayout({ children }) {

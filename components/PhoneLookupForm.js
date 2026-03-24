@@ -176,16 +176,16 @@ function ResultCard({ result }) {
           "No phone found for this contact."
         )}
       </p>
-      <p className="mt-1 text-xs text-slate-500">
+      {/* <p className="mt-1 text-xs text-slate-500">
         Status: {result?.status || "unknown"} | Request ID: {result?.requestId || "n/a"}
-      </p>
+      </p> */}
 
-      <details className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
+      {/* <details className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
         <summary className="cursor-pointer text-xs font-medium text-slate-700">Raw JSON (debug)</summary>
         <pre className="mt-3 overflow-x-auto rounded bg-slate-100 p-3 text-xs text-slate-700">
           {JSON.stringify(result?.raw || {}, null, 2)}
         </pre>
-      </details>
+      </details> */}
     </section>
   );
 }
