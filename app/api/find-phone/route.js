@@ -53,7 +53,7 @@ export async function POST(request) {
         {
           success: false,
           code: "CONFIG_ERROR",
-          error: "Missing BETTERCONTACT_API_KEY on server.",
+          error: "Missing API_KEYs on server.",
         },
         500,
       );
@@ -129,7 +129,7 @@ export async function POST(request) {
         {
           success: false,
           code: "UPSTREAM_ERROR",
-          error: "Better Contact response did not include request id.",
+          error: "response did not include request id.",
           details: createData,
         },
         502,
@@ -152,7 +152,7 @@ export async function POST(request) {
           {
             success: false,
             code: "UPSTREAM_ERROR",
-            error: "Better Contact polling failed.",
+            error: "Contact polling failed.",
             requestId,
             details: pollData,
           },
