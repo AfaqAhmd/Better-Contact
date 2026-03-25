@@ -46,7 +46,9 @@ async function safeReadResponse(response) {
 
 export async function POST(request) {
   try {
-    if (!process.env.BETTERCONTACT_API_KEY) {
+    const isFreezeEnabled = String(process.env.BETTERCONTACT_FREEZE || "").toLowerCase() === "true";
+
+    if (!isFreezeEnabled && !process.env.BETTERCONTACT_API_KEY) {
       return jsonResponse(
         {
           success: false,
@@ -69,6 +71,33 @@ export async function POST(request) {
       );
     }
 
+    // Freeze/mock mode (for testing the UI animation without calling Better Contact).
+    if (isFreezeEnabled) {
+      const mode = String(process.env.BETTERCONTACT_FREEZE_MODE || "found").toLowerCase();
+      const delayMs = Number.parseInt(String(process.env.BETTERCONTACT_FREEZE_DELAY_MS || "12000"), 10);
+      const phone =
+        process.env.BETTERCONTACT_FREEZE_PHONE || "+1 (555) 123-4567";
+
+      const requestId = `FREEZE_${Date.now().toString(36)}`;
+
+      await sleep(Number.isFinite(delayMs) && delayMs > 0 ? delayMs : 12000);
+
+      const found = mode !== "not_found" && mode !== "none" && mode !== "false";
+      return jsonResponse({
+        success: true,
+        found,
+        phone: found ? phone : null,
+        status: "terminated",
+        reason: found ? "found" : "not_found",
+        requestId,
+        raw: {
+          mocked: true,
+          mode,
+          input,
+        },
+      });
+    }
+
     const createPayload = buildAsyncCreatePayload(input);
 
     const createResponse = await fetch(`${BETTERCONTACT_BASE_URL}/async`, {
@@ -87,7 +116,7 @@ export async function POST(request) {
         {
           success: false,
           code: "UPSTREAM_ERROR",
-          error: "Failed to create Better Contact async request.",
+          error: "Failed to get Contact async request.",
           details: createData,
         },
         502,

@@ -38,6 +38,19 @@ The Better Contact API key is used only on the server in `/api/find-phone`.
    BETTERCONTACT_API_KEY=your_real_key_here
    ```
 
+### Optional: Freeze Mode (for testing the UI animation)
+
+If you want to test the “scraping” animation without calling Better Contact, set:
+
+```env
+BETTERCONTACT_FREEZE=true
+BETTERCONTACT_FREEZE_MODE=found   # found | not_found
+BETTERCONTACT_FREEZE_DELAY_MS=12000
+BETTERCONTACT_FREEZE_PHONE=+1 (555) 123-4567
+```
+
+When you’re ready to use the real API again, set `BETTERCONTACT_FREEZE=false`.
+
 ## Run Locally
 
 ```bash
