@@ -18,7 +18,7 @@ export default function HomePage() {
         </section>
 
         <section className="mt-6 w-full rounded-2xl border border-white/10 bg-white/5 p-5 text-center backdrop-blur">
-          <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Datasource we use</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Data sources we use</p>
           <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
             <img src="/images/contactout.png" alt="Contactout" className="h-10 w-auto rounded-xl border border-white/10 bg-white/5 p-2" />
             <img src="/images/hunter.png" alt="Hunter" className="h-10 w-auto rounded-xl border border-white/10 bg-white/5 p-2" />
