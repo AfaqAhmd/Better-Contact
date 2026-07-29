@@ -245,8 +245,15 @@ function InputField({ id, name, label, type = "text", value, onChange, placehold
   );
 }
 
+const PROVIDER_LABELS = {
+  bettercontact: "BetterContact",
+  prospeo: "Prospeo",
+  contactout: "ContactOut",
+};
+
 function ResultCard({ result }) {
   const found = Boolean(result?.found);
+  const providerLabel = PROVIDER_LABELS[result?.provider] || null;
   return (
     <section className="mt-6 rounded-xl border border-white/10 bg-white/5 p-4 sm:p-5">
       <h2 className="text-sm font-semibold text-white">Lookup Result</h2>
@@ -254,6 +261,7 @@ function ResultCard({ result }) {
         {found ? (
           <>
             Phone found: <span className="font-semibold text-white">{result.phone}</span>
+            {providerLabel ? <span className="text-white/60"> (via {providerLabel})</span> : null}
           </>
         ) : (
           "No phone found for this contact."
