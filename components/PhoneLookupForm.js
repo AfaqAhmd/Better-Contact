@@ -261,8 +261,8 @@ function ResultCard({ result }) {
       </p>
       {SHOW_DEBUG ? (
         <p className="mt-1 text-xs text-white/50">
-          Status: {result?.status || "unknown"} | Reason: {result?.reason || "n/a"} | Request ID:{" "}
-          {result?.requestId || "n/a"}
+          Status: {result?.status || "unknown"} | Reason: {result?.reason || "n/a"} | Provider:{" "}
+          {result?.provider || "n/a"} | Request ID: {result?.requestId || "n/a"}
         </p>
       ) : null}
     </section>

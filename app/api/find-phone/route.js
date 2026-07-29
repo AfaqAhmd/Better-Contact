@@ -1,54 +1,15 @@
-import {
-  BETTERCONTACT_BASE_URL,
-  POLL_INTERVAL_MS,
-  MAX_POLL_ATTEMPTS,
-  sleep,
-  normalizeInput,
-  buildAsyncCreatePayload,
-  findPhoneFromPollResponse,
-} from "../../../lib/bettercontact";
-
-const TERMINAL_STATUSES = new Set([
-  "completed",
-  "terminated",
-  "done",
-  "success",
-  "finished",
-  "failed",
-  "error",
-  "not_found",
-  "no_data",
-  "cancelled",
-  "canceled",
-]);
+import { normalizeInput, sleep } from "../../../lib/bettercontact";
+import { configuredProviderNames, lookupPhoneWaterfall } from "../../../lib/providers/waterfall";
 
 function jsonResponse(body, status = 200) {
   return Response.json(body, { status });
-}
-
-function hasResultPayload(pollData) {
-  if (!pollData || typeof pollData !== "object") return false;
-  return (
-    typeof pollData.data !== "undefined" ||
-    typeof pollData.result !== "undefined" ||
-    typeof pollData.items !== "undefined"
-  );
-}
-
-async function safeReadResponse(response) {
-  const text = await response.text();
-  try {
-    return text ? JSON.parse(text) : null;
-  } catch {
-    return { raw: text };
-  }
 }
 
 export async function POST(request) {
   try {
     const isFreezeEnabled = String(process.env.BETTERCONTACT_FREEZE || "").toLowerCase() === "true";
 
-    if (!isFreezeEnabled && !process.env.BETTERCONTACT_API_KEY) {
+    if (!isFreezeEnabled && configuredProviderNames().length === 0) {
       return jsonResponse(
         {
           success: false,
@@ -71,7 +32,7 @@ export async function POST(request) {
       );
     }
 
-    // Freeze/mock mode (for testing the UI animation without calling Better Contact).
+    // Freeze/mock mode (for testing the UI animation without calling any provider).
     if (isFreezeEnabled) {
       const mode = String(process.env.BETTERCONTACT_FREEZE_MODE || "found").toLowerCase();
       const delayMs = Number.parseInt(String(process.env.BETTERCONTACT_FREEZE_DELAY_MS || "12000"), 10);
@@ -89,6 +50,7 @@ export async function POST(request) {
         phone: found ? phone : null,
         status: "terminated",
         reason: found ? "found" : "not_found",
+        provider: found ? "freeze" : null,
         requestId,
         raw: {
           mocked: true,
@@ -98,125 +60,19 @@ export async function POST(request) {
       });
     }
 
-    const createPayload = buildAsyncCreatePayload(input);
+    // Waterfall: tries BetterContact, then Prospeo, then ContactOut (order configurable
+    // via PROVIDER_ORDER), stopping at the first one that returns a phone.
+    const result = await lookupPhoneWaterfall(input);
 
-    const createResponse = await fetch(`${BETTERCONTACT_BASE_URL}/async`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": process.env.BETTERCONTACT_API_KEY,
-      },
-      body: JSON.stringify(createPayload),
-      cache: "no-store",
-    });
-
-    const createData = await safeReadResponse(createResponse);
-    if (!createResponse.ok) {
-      return jsonResponse(
-        {
-          success: false,
-          code: "UPSTREAM_ERROR",
-          error: "Failed to get Contact async request.",
-          details: createData,
-        },
-        502,
-      );
-    }
-
-    const requestId = createData?.request_id || createData?.id;
-    if (!requestId) {
-      return jsonResponse(
-        {
-          success: false,
-          code: "UPSTREAM_ERROR",
-          error: "response did not include request id.",
-          details: createData,
-        },
-        502,
-      );
-    }
-
-    let lastPollData = null;
-    for (let attempt = 1; attempt <= MAX_POLL_ATTEMPTS; attempt += 1) {
-      const pollResponse = await fetch(`${BETTERCONTACT_BASE_URL}/async/${requestId}`, {
-        method: "GET",
-        headers: {
-          "X-API-Key": process.env.BETTERCONTACT_API_KEY,
-        },
-        cache: "no-store",
-      });
-
-      const pollData = await safeReadResponse(pollResponse);
-      if (!pollResponse.ok) {
-        return jsonResponse(
-          {
-            success: false,
-            code: "UPSTREAM_ERROR",
-            error: "Contact polling failed.",
-            requestId,
-            details: pollData,
-          },
-          502,
-        );
-      }
-
-      lastPollData = pollData;
-      const status = String(pollData?.status || "").toLowerCase();
-      const phone = findPhoneFromPollResponse(pollData);
-
-      // Return early whenever a phone is present, even if status labels vary.
-      if (phone) {
-        return jsonResponse({
-          success: true,
-          found: true,
-          phone,
-          status: pollData?.status || "terminated",
-          reason: "found",
-          requestId,
-          raw: pollData,
-        });
-      }
-
-      if (TERMINAL_STATUSES.has(status)) {
-        return jsonResponse({
-          success: true,
-          found: false,
-          phone: null,
-          status: pollData?.status || "terminated",
-          reason: "not_found",
-          requestId,
-          raw: pollData,
-        });
-      }
-
-      if (attempt < MAX_POLL_ATTEMPTS) {
-        await sleep(POLL_INTERVAL_MS);
-      }
-    }
-
-    // Some upstream responses can include a complete payload without a clear terminal status.
-    // In that case, treat it as "no phone found" instead of hard timeout.
-    if (hasResultPayload(lastPollData)) {
-      return jsonResponse({
-        success: true,
-        found: false,
-        phone: null,
-        status: lastPollData?.status || "unknown",
-        reason: "not_found",
-        requestId,
-        raw: lastPollData,
-      });
-    }
-
-    // First-version UX: never show timeout to the client; return not found instead.
     return jsonResponse({
       success: true,
-      found: false,
-      phone: null,
-      status: lastPollData?.status || "pending",
-      reason: "poll_window_ended",
-      requestId,
-      raw: lastPollData || {},
+      found: result.found,
+      phone: result.phone,
+      status: result.status,
+      reason: result.reason,
+      provider: result.provider,
+      requestId: result.requestId,
+      raw: result.attempts,
     });
   } catch (error) {
     return jsonResponse(
